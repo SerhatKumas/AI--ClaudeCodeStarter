@@ -1,0 +1,42 @@
+# Dependabot keeps dependencies and GitHub Actions up to date.
+#
+# The "github-actions" ecosystem below is universal — it works for ANY repo that
+# uses Actions, so it's enabled out of the box.
+#
+# Package ecosystems ARE language-specific, so they're left commented. Uncomment
+# the one(s) matching your stack and set the correct `directory`.
+version: 2
+updates:
+  # Keeps the Actions in .github/workflows pinned to current versions.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # --- Uncomment the ecosystem(s) you use -----------------------------------
+  # - package-ecosystem: npm           # also covers pnpm / yarn
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  #   open-pull-requests-limit: 10
+  #   commit-message: { prefix: chore }
+  #
+  # - package-ecosystem: pip           # also covers poetry / uv (pyproject)
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  #
+  # - package-ecosystem: gomod
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  #
+  # - package-ecosystem: cargo
+  #   directory: "/"
+  #   schedule: { interval: weekly }
+  #
+  # - package-ecosystem: docker
+  #   directory: "/"
+  #   schedule: { interval: weekly }

@@ -1,0 +1,17 @@
+# Claude Code — personal, machine-specific overrides should NOT be committed.
+.claude/settings.local.json
+
+# Claude Code local state / caches (if present)
+.claude/*.local.json
+.claude/.cache/
+.claude/projects/
+
+# Common noise — trim to taste
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

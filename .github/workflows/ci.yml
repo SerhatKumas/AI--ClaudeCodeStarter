@@ -1,0 +1,135 @@
+## Universal CI — language-agnostic gates that apply to (almost) any repo.
+##
+## This intentionally contains NO build/lint/test steps for a specific language.
+## When you adopt a stack, uncomment the "project-checks" job at the bottom and
+## fill in your own install / lint / typecheck / test / build commands.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch: # allow manual runs from the Actions tab
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so we can diff against the base branch
+
+      - name: Block unresolved merge-conflict markers
+        run: |
+          if git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . ':!.github/workflows/*'; then
+            echo "::error::Found merge-conflict markers. Resolve them before merging."
+            exit 1
+          fi
+
+      - name: Block large files (>5 MB)
+        run: |
+          limit=$((5 * 1024 * 1024))
+          fail=0
+          while IFS= read -r -d '' f; do
+            size=$(wc -c < "$f")
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::$f is $((size / 1024 / 1024)) MB (limit 5 MB). Use Git LFS or external storage."
+              fail=1
+            fi
+          done < <(git ls-files -z)
+          exit $fail
+
+      - name: Warn on stray debug markers
+        run: |
+          # Non-blocking: surfaces leftover TODO/FIXME/debugger statements in the diff.
+          if git grep -nE '(FIXME|TODO|XXX|debugger;)' -- . ':!.github/**' ':!.claude/**' ':!**/*.md'; then
+            echo "::warning::Found TODO/FIXME/debugger markers — make sure they're intentional."
+          fi
+
+  commitlint:
+    name: Conventional commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR commit messages
+        run: |
+          # Enforce Conventional Commits on every commit in the PR.
+          pattern='^(Merge|Revert|(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+)'
+          fail=0
+          while IFS= read -r sha; do
+            subject=$(git log -1 --format=%s "$sha")
+            if ! echo "$subject" | grep -qE "$pattern"; then
+              echo "::error::Non-conventional commit $sha: \"$subject\""
+              fail=1
+            fi
+          done < <(git rev-list origin/${{ github.base_ref }}..HEAD)
+          if [ "$fail" -ne 0 ]; then
+            echo "Expected: <type>(<scope>): <summary>  e.g. 'fix(api): handle null cart total'"
+            exit 1
+          fi
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Review new/changed dependencies for known vulns & bad licenses
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  ## ---------------------------------------------------------------------------
+  ## PROJECT CHECKS — uncomment and fill in for your stack.
+  ## Replace the placeholder commands with your real install/lint/test/build.
+  ## ---------------------------------------------------------------------------
+  # project-checks:
+  #   name: Lint, typecheck, test, build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     # --- set up your language/runtime, e.g.:
+  #     # - uses: actions/setup-node@v4   { with: { node-version: 20, cache: pnpm } }
+  #     # - uses: actions/setup-python@v5 { with: { python-version: "3.12" } }
+  #     # - uses: actions/setup-go@v5     { with: { go-version: "1.22" } }
+  #
+  #     - name: Install
+  #       run: echo "TODO: e.g. pnpm install --frozen-lockfile"
+  #     - name: Lint
+  #       run: echo "TODO: e.g. pnpm lint"
+  #     - name: Typecheck
+  #       run: echo "TODO: e.g. pnpm typecheck"
+  #     - name: Test
+  #       run: echo "TODO: e.g. pnpm test"
+  #     - name: Build
+  #       run: echo "TODO: e.g. pnpm build"
